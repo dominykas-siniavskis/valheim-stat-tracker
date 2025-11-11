@@ -1,0 +1,6 @@
+app/valheim-save-tools.jar
+/tmp/
+__pycache__/
+.env
+app/credentials.json
+venv/
