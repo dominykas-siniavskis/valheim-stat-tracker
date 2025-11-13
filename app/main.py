@@ -318,7 +318,6 @@ def main_loop():
                 else:
                     data = json.loads(raw)
                     totals = aggregate_chests(data)
-                    info(totals)
                     info(f"{len(totals)} item types found. Uploading…")
                     ws = get_or_create_sheet(gc, "World")
                     upload_totals(ws, totals)

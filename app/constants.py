@@ -20,5 +20,6 @@ SKILL_MAP = {
     103: "Swim",
     104: "Fishing",
     106: "Farming",
+    107: "Crafting",
     108: "Dodging"
 }
