@@ -9,6 +9,8 @@ from datetime import datetime
 import struct
 import os
 
+import io
+import base64
 
 
 
@@ -168,16 +170,120 @@ def export_world_json():
     with open(JSON_OUT, "r", encoding="utf-8") as f:
         return f.read()
 
+def read_u32(buf):
+    return struct.unpack("<I", buf.read(4))[0]
+
+def read_i32(buf):
+    return struct.unpack("<i", buf.read(4))[0]
+
+def read_f32(buf):
+    return struct.unpack("<f", buf.read(4))[0]
+
+def read_bool(buf):
+    return struct.unpack("<?", buf.read(1))[0]
+
+def read_len_string(buf):
+    ln = read_u32(buf)
+    return buf.read(ln).decode("utf-8", errors="replace")
+
+def read_len_string(buf):
+    ln = read_u32(buf)
+    raw = buf.read(ln)
+    return raw.decode("utf-8", errors="replace")
+
+def read_byte(buf):
+    return struct.unpack("<B", buf.read(1))[0]
+
+def read_u64(buf):
+    return struct.unpack("<Q", buf.read(8))[0]
+
+def read_7bit_encoded_int(buf):
+    """Read a 7-bit encoded integer (used for string lengths)"""
+    result = 0
+    shift = 0
+    while True:
+        byte = read_byte(buf)
+        result |= (byte & 0x7F) << shift
+        if (byte & 0x80) == 0:
+            break
+        shift += 7
+    return result
+
+def decode_chest_items(zdo):
+    items_b64 = zdo.get("stringsByName", {}).get("items")
+    if not items_b64:
+        return []
+
+    raw = base64.b64decode(items_b64)
+    buf = io.BytesIO(raw)
+
+    _header = read_u32(buf)
+    count = read_u32(buf)
+
+    results = []
+
+    for _ in range(count):
+        # Basic item info
+        name_len = read_byte(buf)
+        name = buf.read(name_len).decode("utf-8", errors="replace")
+        stack = read_i32(buf)
+        durability = read_f32(buf)
+        
+        # Extended metadata
+        equipped = read_byte(buf)  # 1 byte
+        quality = read_i32(buf)    # 4 bytes
+        variant = read_i32(buf)    # 4 bytes
+        crafter_id = read_u64(buf) # 8 bytes
+        
+        has_crafter_name = read_byte(buf)  # 1 byte
+        crafter_name = None
+        if has_crafter_name:
+            crafter_name_len = read_byte(buf)
+            crafter_name = buf.read(crafter_name_len).decode("utf-8", errors="replace")
+        
+        # There appear to be more fields here - let's see what's left
+        # Skip remaining bytes (should be around 17 more based on our 35 byte skip)
+        remaining = 35 - (1 + 4 + 4 + 8 + 1)  # = 17 bytes
+        if has_crafter_name and crafter_name:
+            remaining -= (1 + len(crafter_name))
+        buf.read(remaining)
+        
+        results.append({
+            'name': name,
+            'stack': stack,
+            'durability': durability,
+            'equipped': bool(equipped),
+            'quality': quality,
+            'variant': variant,
+            'crafter_id': crafter_id,
+            'crafter_name': crafter_name
+        })
+
+    return results
+
 def aggregate_chests(world_json_obj):
     totals = defaultdict(int)
-    for z in world_json_obj.get("zdos", []) or []:
-        prefab = (z.get("prefab") or "").lower()
-        if "chest" in prefab:  # includes all chest variants
-            for it in (z.get("inventory") or []):
-                name  = it.get("name") or it.get("item") or "<unknown>"
-                stack = int(it.get("stack") or 0)
-                totals[name] += stack
-    return totals
+    all_items = []  # Store all items with their metadata
+
+    zdos = world_json_obj.get("zdoList") or []
+
+    for z in zdos:
+        prefab = (z.get("prefabName") or "").lower()
+
+        # detect chest
+        if "piece_chest" in prefab:
+            items_b64 = z.get("stringsByName", {}).get("items")
+            if items_b64:
+                items = decode_chest_items(z)
+                for item_dict in items:
+                    name = item_dict['name']
+                    stack = item_dict['stack']
+                    totals[name] += stack
+                    all_items.append(item_dict)  # Keep full metadata
+            else:
+                print("Chest has no inventory")
+    
+    return totals  # Return both totals and detailed items
 
 def upload_totals(sheet, totals):
     sheet.clear()
@@ -236,31 +342,32 @@ def main_loop():
                 else:
                     data = json.loads(raw)
                     totals = aggregate_chests(data)
+                    info(totals)
                     info(f"{len(totals)} item types found. Uploading…")
                     ws = get_or_create_sheet(gc, "World")
                     upload_totals(ws, totals)
                     ok(f"Updated World tab at {datetime.now().strftime('%H:%M:%S')}")
                     last_hash = h
 
-            # Player uploads skill data
-            if not os.path.exists(PLAYER_PATH):
-                raise FileNotFoundError(f"Character file not found: {PLAYER_PATH}")
+            # # Player uploads skill data
+            # if not os.path.exists(PLAYER_PATH):
+            #     raise FileNotFoundError(f"Character file not found: {PLAYER_PATH}")
 
-            ws_name = PLAYER_NAME
-            ws = get_or_create_sheet(gc, ws_name)
+            # ws_name = PLAYER_NAME
+            # ws = get_or_create_sheet(gc, ws_name)
 
-            current_mtime  = get_file_mtime(PLAYER_PATH)
-            if current_mtime != last_m_time:
-                info(f"Detected new save for {PLAYER_NAME}, reading updated data...")
-                last_m_time = current_mtime
-                skills = decode_skills(PLAYER_PATH)
-                if skills:
-                    upload_skills(ws, skills)
-                    ok(f"Updated {ws_name} tab at {datetime.now().strftime('%H:%M:%S')}")
-                else:
-                    warning("No skills parsed — player file might be incomplete or empty.")
-            else:
-                info(f"No new save yet, skipping upload. File mtime {current_mtime}")
+            # current_mtime  = get_file_mtime(PLAYER_PATH)
+            # if current_mtime != last_m_time:
+            #     info(f"Detected new save for {PLAYER_NAME}, reading updated data...")
+            #     last_m_time = current_mtime
+            #     skills = decode_skills(PLAYER_PATH)
+            #     if skills:
+            #         upload_skills(ws, skills)
+            #         ok(f"Updated {ws_name} tab at {datetime.now().strftime('%H:%M:%S')}")
+            #     else:
+            #         warning("No skills parsed — player file might be incomplete or empty.")
+            # else:
+            #     info(f"No new save yet, skipping upload. File mtime {current_mtime}")
         except Exception as e:
             error(str(e))
 
