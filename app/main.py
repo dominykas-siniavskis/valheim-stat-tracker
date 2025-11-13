@@ -349,25 +349,25 @@ def main_loop():
                     ok(f"Updated World tab at {datetime.now().strftime('%H:%M:%S')}")
                     last_hash = h
 
-            # # Player uploads skill data
-            # if not os.path.exists(PLAYER_PATH):
-            #     raise FileNotFoundError(f"Character file not found: {PLAYER_PATH}")
+            # Player uploads skill data
+            if not os.path.exists(PLAYER_PATH):
+                raise FileNotFoundError(f"Character file not found: {PLAYER_PATH}")
 
-            # ws_name = PLAYER_NAME
-            # ws = get_or_create_sheet(gc, ws_name)
+            ws_name = PLAYER_NAME
+            ws = get_or_create_sheet(gc, ws_name)
 
-            # current_mtime  = get_file_mtime(PLAYER_PATH)
-            # if current_mtime != last_m_time:
-            #     info(f"Detected new save for {PLAYER_NAME}, reading updated data...")
-            #     last_m_time = current_mtime
-            #     skills = decode_skills(PLAYER_PATH)
-            #     if skills:
-            #         upload_skills(ws, skills)
-            #         ok(f"Updated {ws_name} tab at {datetime.now().strftime('%H:%M:%S')}")
-            #     else:
-            #         warning("No skills parsed — player file might be incomplete or empty.")
-            # else:
-            #     info(f"No new save yet, skipping upload. File mtime {current_mtime}")
+            current_mtime  = get_file_mtime(PLAYER_PATH)
+            if current_mtime != last_m_time:
+                info(f"Detected new save for {PLAYER_NAME}, reading updated data...")
+                last_m_time = current_mtime
+                skills = decode_skills(PLAYER_PATH)
+                if skills:
+                    upload_skills(ws, skills)
+                    ok(f"Updated {ws_name} tab at {datetime.now().strftime('%H:%M:%S')}")
+                else:
+                    warning("No skills parsed — player file might be incomplete or empty.")
+            else:
+                info(f"No new save yet, skipping upload. File mtime {current_mtime}")
         except Exception as e:
             error(str(e))
 
