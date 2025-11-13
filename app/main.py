@@ -12,10 +12,14 @@ import os
 import io
 import base64
 
+import gspread
+from google.oauth2.service_account import Credentials
+
+from dotenv import load_dotenv
+
 
 
 # .env support (cwd first, then folder of script)
-from dotenv import load_dotenv
 def _load_env():
     # Try CWD .env, then script directory .env
     load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"), override=False)
@@ -23,8 +27,6 @@ def _load_env():
     load_dotenv(dotenv_path=os.path.join(base, ".env"), override=False)
 _load_env()
 
-import gspread
-from google.oauth2.service_account import Credentials
 
 def exe_dir():
     return os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
@@ -179,35 +181,11 @@ def read_i32(buf):
 def read_f32(buf):
     return struct.unpack("<f", buf.read(4))[0]
 
-def read_bool(buf):
-    return struct.unpack("<?", buf.read(1))[0]
-
-def read_len_string(buf):
-    ln = read_u32(buf)
-    return buf.read(ln).decode("utf-8", errors="replace")
-
-def read_len_string(buf):
-    ln = read_u32(buf)
-    raw = buf.read(ln)
-    return raw.decode("utf-8", errors="replace")
-
 def read_byte(buf):
     return struct.unpack("<B", buf.read(1))[0]
 
 def read_u64(buf):
     return struct.unpack("<Q", buf.read(8))[0]
-
-def read_7bit_encoded_int(buf):
-    """Read a 7-bit encoded integer (used for string lengths)"""
-    result = 0
-    shift = 0
-    while True:
-        byte = read_byte(buf)
-        result |= (byte & 0x7F) << shift
-        if (byte & 0x80) == 0:
-            break
-        shift += 7
-    return result
 
 def decode_chest_items(zdo):
     items_b64 = zdo.get("stringsByName", {}).get("items")
@@ -241,8 +219,6 @@ def decode_chest_items(zdo):
             crafter_name_len = read_byte(buf)
             crafter_name = buf.read(crafter_name_len).decode("utf-8", errors="replace")
         
-        # There appear to be more fields here - let's see what's left
-        # Skip remaining bytes (should be around 17 more based on our 35 byte skip)
         remaining = 35 - (1 + 4 + 4 + 8 + 1)  # = 17 bytes
         if has_crafter_name and crafter_name:
             remaining -= (1 + len(crafter_name))
