@@ -1,9 +1,9 @@
 # Valheim Stat Tracker
 
 ## What to do
-- Install Java 17 from here: https://download.oracle.com/java/17/archive/jdk-17.0.12_windows-x64_bin.msi
+- Install Java 17 from here: https://download.oracle.com/java/17/archive/jdk-17.0.12_windows-x64_bin.msi **(Only for host)**
 - Install Python 3.13
-- Download valheim-save-tools from here: https://github.com/Kakoen/valheim-save-tools/releases/download/1.1.3/valheim-save-tools.jar
+- Download valheim-save-tools from here: https://github.com/Kakoen/valheim-save-tools/releases/download/1.1.3/valheim-save-tools.jar **(Only for host)**
 - Download this project. Via Git or just .zip. Save in an easy to access directory. Like `C:\User\Documents`
 - Drop the save tools in the `app/` directory of local project
 - Create a .env file, fill it out.
